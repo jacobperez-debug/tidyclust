@@ -152,3 +152,18 @@ make_predictions <- function(x, prefix, n_clusters) {
 
   pred_clusts
 }
+
+.birch_predict_stream <- function(object, new_data, ..., prefix = "Cluster_") {
+  new_data_matrix <- as.matrix(new_data)
+
+  microclusters <- stream::get_microclusters(object)
+
+  dist_matrix <- as.matrix(proxy::dist(new_data_matrix, microclusters, method = "Euclidean"))
+
+  cluster_assignments <- apply(dist_matrix, 1, which.min)
+
+  n_clusters <- nrow(microclusters)
+
+  make_predictions(cluster_assignments, prefix, n_clusters)
+
+}
