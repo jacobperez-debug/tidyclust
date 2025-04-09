@@ -29,9 +29,9 @@
 birch <-
   function(mode = "partition",
            engine = "stream",
-           max_leaf = NULL,
-           threshold = NULL,
-           branching_factor = NULL) {
+           max_leaf = 100,
+           threshold = 0.5,
+           branching_factor = 50) {
     args <- list(
       max_leaf = enquo(max_leaf),
       threshold = enquo(threshold),
@@ -120,6 +120,9 @@ update.birch <- function(object,
 check_args.birch <- function(object) {
   args <- lapply(object$args, rlang::eval_tidy)
 
+  if (args$max_leaf < 1) {
+    rlang::abort("Max leaf entries must be at least 1.")
+  }
   if (args$threshold < 0) {
     rlang::abort("Threshold cannot be less than 0.")
   }
