@@ -79,3 +79,27 @@ stats_k_means_engine_args <-
     component = "k_means",
     component_id = "engine"
   )
+
+#' @export
+tunable.birch <- function(x, ...) {
+  res <- NextMethod()
+  if (x$engine == "stream") {
+    res <- add_engine_parameters(res, stream_birch_engine_args)
+  }
+  res
+}
+
+stream_birch_engine_args <-
+  tibble::tibble(
+    name = c("threshold",
+             "branching_factor",
+             "max_leaf"),
+    call_info = list(
+      list(pkg = "tidyclust", fun = "threshold"),
+      list(pkg = "tidyclust", fun = "branching_factor"),
+      list(pkg = "tidyclust", fun = "max_leaf")
+    ),
+    source = "cluster_spec",
+    component = "birch",
+    component_id = "engine"
+  )

@@ -179,3 +179,14 @@ extract_fit_summary.hclust <- function(object, ...) {
     cluster_assignments = clusts
   )
 }
+
+#' @export
+extract_fit_summary.DSC_BIRCH <- function(object, ...) {
+  centroids <- stream::get_microclusters(object)
+  n_clusters <- nrow(centroids)
+
+  list(
+    cluster_names = paste0("Cluster_", seq_len(n_clusters)),
+    centroids = as_tibble(centroids)
+  )
+}
