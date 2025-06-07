@@ -154,16 +154,22 @@ make_predictions <- function(x, prefix, n_clusters) {
 }
 
 .birch_predict_stream <- function(object, new_data, ..., prefix = "Cluster_") {
-  new_data_matrix <- as.matrix(new_data)
+  global_model <- attr(object, "global_model")
+  global_method <- attr(object, "global_method")
 
-  microclusters <- stream::get_microclusters(object)
+  if (global_method %in% c("k_means", "hier_clust")) {
+    preds <- predict(global_model, as.data.frame(new_data), ...)
+    return(preds[[1]])
 
-  dist_matrix <- as.matrix(proxy::dist(new_data_matrix, microclusters, method = "Euclidean"))
+  }
 
-  cluster_assignments <- apply(dist_matrix, 1, which.min)
+  if (global_method == "none") {
+    new_data_matrix <- as.matrix(new_data)
+    microclusters <- stream::get_microclusters(object)
+    dist_matrix <- as.matrix(flexclust::dist2(new_data_matrix, microclusters))
+    cluster_assignments <- apply(dist_matrix, 1, which.min)
+    n_clusters <- nrow(microclusters)
 
-  n_clusters <- nrow(microclusters)
-
-  make_predictions(cluster_assignments, prefix, n_clusters)
-
+    return(make_predictions(cluster_assignments, prefix, n_clusters))
+  }
 }
