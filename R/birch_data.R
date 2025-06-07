@@ -57,9 +57,9 @@ make_birch <- function() {
   modelenv::set_model_arg(
     model = "birch",
     eng = "stream",
-    exposed = "threshold",
-    original = "threshold",
-    func = list(pkg = "tidyclust", fun = "threshold"),
+    exposed = "radius_threshold",
+    original = "radius_threshold",
+    func = list(pkg = "tidyclust", fun = "radius_threshold"),
     has_submodel = TRUE
   )
 
@@ -69,6 +69,33 @@ make_birch <- function() {
     exposed = "branching_factor",
     original = "branching_factor",
     func = list(pkg = "tidyclust", fun = "branching_factor"),
+    has_submodel = TRUE
+  )
+
+  modelenv::set_model_arg(
+    model = "birch",
+    eng = "stream",
+    exposed = "global_method",
+    original = "global_method",
+    func = list(pkg = "tidyclust", fun = "global_method"),
+    has_submodel = TRUE
+  )
+
+  modelenv::set_model_arg(
+    model = "birch",
+    eng = "stream",
+    exposed = "num_clusters",
+    original = "num_clusters",
+    func = list(pkg = "tidyclust", fun = "num_clusters"),
+    has_submodel = TRUE
+  )
+
+  modelenv::set_model_arg(
+    model = "birch",
+    eng = "stream",
+    exposed = "cut_height",
+    original = "cut_height",
+    func = list(pkg = "tidyclust", fun = "cut_height"),
     has_submodel = TRUE
   )
 
