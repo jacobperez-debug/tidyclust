@@ -2,21 +2,34 @@
 #'
 #' @description
 #'
-#' This function performs scalable clustering for large datasets by constructing
-#' a Clustering Feature Tree (CF Tree) with a specified threshold, branching,
-#' and maxLeaf factor.
+#' `birch()` defines a model that fits clusters by incrementally building a
+#' compact tree structure, using radius_threshold based clustering features.
 #'
-#' `birch()` defines a model that fits clusters based on a distance-based
-#' dendrogram
+#' There are different ways to fit this model, and the method of estimation is
+#' chosen by setting the model engine. The engine-specific pages for this model
+#' are listed below.
+#'
+#' - \link[details_birch_stream]{stream}
 #'
 #' @param mode A single character string for the type of model. The only
 #'   possible value for this model is "partition".
 #' @param engine A single character string specifying what computational engine
 #'   to use for fitting. Possible engines are listed below. The default for this
 #'   model is `"stream"`.
-#' @param threshold Maximum diameter of sub-clusters stored in leaf nodes.
-#' @param branching_factor Maximum number of CF entries per node.
-#' @param max_leaf Maximum number of data points allowed within a leaf node.
+#' @param radius_threshold Positive double, radius radius_threshold for merging points into
+#' the same cluster feature (CF) node.
+#' @param branching_factor Positive integer, maximum number of child nodes in a
+#' non-leaf node of the CF tree.
+#' @param max_leaf Positive integer, maximum number of CF entries in a leaf node.
+#'
+#' @details
+#'
+#' ## What does it mean to predict?
+#'
+#' In a BIRCH model, prediction assigns a new observation to the cluster whose
+#' centroid is the closest, using the final CF tree structure. The centroids are
+#' computed from the cluster feature entries of the leaf node and data points
+#' are assigned using euclidian distance.
 #'
 #' @return A `birch` cluster specification.
 #'
@@ -30,12 +43,19 @@ birch <-
   function(mode = "partition",
            engine = "stream",
            max_leaf = 100,
-           threshold = 0.5,
-           branching_factor = 50) {
+           radius_threshold = 0.5,
+           branching_factor = 50,
+           global_method = "none",
+           num_clusters = NULL,
+           cut_height = NULL) {
+
     args <- list(
       max_leaf = enquo(max_leaf),
-      threshold = enquo(threshold),
-      branching_factor = enquo(branching_factor)
+      radius_threshold = enquo(radius_threshold),
+      branching_factor = enquo(branching_factor),
+      global_method = enquo(global_method),
+      num_clusters = enquo(num_clusters),
+      cut_height = enquo(cut_height)
     )
 
     new_cluster_spec(
@@ -67,11 +87,14 @@ print.birch <- function(x, ...) {
 #' @rdname tidyclust_update
 #' @export
 update.birch <- function(object,
-                              parameters = NULL,
-                              threshold = NULL,
-                              branching_factor = NULL,
-                              max_leaf = NULL,
-                              fresh = FALSE, ...) {
+                         parameters = NULL,
+                         radius_threshold = NULL,
+                         branching_factor = NULL,
+                         max_leaf = NULL,
+                         global_method = NULL,
+                         num_clusters = NULL,
+                         cut_height = NULL,
+                         fresh = FALSE, ...) {
   eng_args <- parsnip::update_engine_parameters(
     object$eng_args, fresh = fresh, ...
   )
@@ -80,9 +103,12 @@ update.birch <- function(object,
     parameters <- parsnip::check_final_param(parameters)
   }
   args <- list(
-    threshold = enquo(threshold),
+    radius_threshold = enquo(radius_threshold),
     branching_factor = enquo(branching_factor),
-    max_leaf = enquo(max_leaf)
+    max_leaf = enquo(max_leaf),
+    global_method = enquo(global_method),
+    num_clusters = enquo(num_clusters),
+    cut_height = enquo(cut_height)
   )
 
   args <- parsnip::update_main_parameters(args, parameters)
@@ -123,12 +149,19 @@ check_args.birch <- function(object) {
   if (args$max_leaf < 1) {
     rlang::abort("Max leaf entries must be at least 1.")
   }
-  if (args$threshold < 0) {
-    rlang::abort("Threshold cannot be less than 0.")
+  if (args$radius_threshold < 0) {
+    rlang::abort("Radius threshold cannot be less than 0.")
   }
   if (args$branching_factor < 1) {
     rlang::abort("Branching factor must be at least 1.")
   }
+  if (!args$global_method %in% c("none", "k_means", "hier_clust")) {
+    rlang::abort("'global_method' must be one of 'none', 'k_means', or 'hier_clust'.")
+  }
+  if (all(is.numeric(args$num_clusters)) && any(args$num_clusters < 0)) {
+    rlang::abort("The number of centers should be >= 0.")
+  }
+
 
   invisible(object)
 }
@@ -144,37 +177,71 @@ translate_tidyclust.birch <- function(x, engine = x$engine, ...) {
 #' Simple Wrapper around birch function
 #'
 #' This wrapper prepares the data into a distance matrix to send to
-#' `stream::DSC_BIRCH` and retains the parameters `threshold`, `branching_factor`, or
+#' `stream::DSC_BIRCH` and retains the parameters `radius_threshold`, `branching_factor`, or
 #' `max_leaf` as an attribute.
 #'
 #' @param x matrix or data frame
-#' @param threshold the maximum diameter for sub-cluster
+#' @param radius_threshold the maximum diameter for sub-cluster
 #' @param branching_factor the maximum number of CF subclusters
 #' @param max_leaf the maximum number of entries in a leaf node
 #'
 #' @keywords internal
 #' @export
 .birch_fit_stream <- function(x,
-                                  threshold = NULL,
-                                  branching_factor = NULL,
-                                  max_leaf = NULL
+                              radius_threshold = NULL,
+                              branching_factor = NULL,
+                              max_leaf = NULL,
+                              global_method = c("none", "k_means", "hier_clust"),
+                              num_clusters = NULL,
+                              cut_height = NULL
                       ) {
+  global_method <- match.arg(global_method)
+
   dmat <- as.matrix(x)
 
   res <- stream::DSC_BIRCH(
-    threshold = threshold,
+    threshold = radius_threshold,
     branching = branching_factor,
     maxLeaf = max_leaf
     )
 
-  data_stream <- stream::DSD_Memory(dmat)
+  update(res, stream::DSD_Memory(dmat), n = nrow(dmat))
 
-  update(res, data_stream, n = nrow(dmat))
-
-  attr(res, "threshold") <- threshold
+  attr(res, "radius_threshold") <- radius_threshold
   attr(res, "branching_factor") <- branching_factor
   attr(res, "max_leaf") <- max_leaf
   attr(res, "training_data") <- x
+  attr(res, "global_method") <- global_method
+  attr(res, "num_clusters") <- num_clusters
+  attr(res, "cut_height") <- cut_height
+
+  microclusters <- stream::get_microclusters(res)
+
+  if(nrow(microclusters) > 5000) {
+    warning(
+      "Prediction or cluster assignment may exceed memory limits consider reducing microclusters or using global clustering."
+    )
+  }
+
+
+  if (global_method == "k_means") {
+    if (is.null(num_clusters)) {
+      stop("Please specify `num_clusters` when using global_method = `k_means`.")
+    }
+
+    k_model <- k_means(num_clusters = num_clusters) %>%
+      fit(~ ., data = as.data.frame(microclusters))
+
+    attr(res, "global_model") <- k_model
+  }
+
+  if (global_method == "hier_clust") {
+
+    hc_model <- hier_clust() %>%
+      fit(~ ., data = as.data.frame(microclusters))
+
+    attr(res, "global_model") <- hc_model
+  }
 
   return(res)
 }
