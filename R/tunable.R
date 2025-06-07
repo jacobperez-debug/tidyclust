@@ -91,13 +91,13 @@ tunable.birch <- function(x, ...) {
 
 stream_birch_engine_args <-
   tibble::tibble(
-    name = c("threshold",
+    name = c("radius_threshold",
              "branching_factor",
              "max_leaf"),
     call_info = list(
-      list(pkg = "tidyclust", fun = "threshold"),
-      list(pkg = "tidyclust", fun = "branching_factor"),
-      list(pkg = "tidyclust", fun = "max_leaf")
+      list(pkg = "dials", fun = "radius_threshold"),
+      list(pkg = "dials", fun = "branching_factor"),
+      list(pkg = "dials", fun = "max_leaf")
     ),
     source = "cluster_spec",
     component = "birch",
