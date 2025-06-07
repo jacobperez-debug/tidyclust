@@ -157,6 +157,64 @@ extract_cluster_assignment.hclust <- function(object,
   cluster_assignment_tibble(clusters, length(unique(clusters)), ...)
 }
 
+#' @export
+extract_cluster_assignment.DSC_BIRCH <- function(object, ...) {
+  args <- list(...)
+  new_data_matrix <- as.matrix(attr(object, "training_data"))
+  global_method <- attr(object, "global_method")
+
+  if (global_method == "none") {
+    microclusters <- stream::get_microclusters(object)
+    dist_matrix <- as.matrix(flexclust::dist2(new_data_matrix, microclusters))
+    cluster_assignments <- apply(dist_matrix, 1, which.min)
+    nclusters <- nrow(microclusters)
+    return(cluster_assignment_tibble(as.numeric(cluster_assignments), nclusters, ...))
+  }
+
+  if(global_method == "k_means") {
+    global_model <- attr(object, "global_model")
+    centers <- extract_centroids(global_model)
+    center_matrix <- as.matrix(centers[ ,-1])
+
+    dist_matrix <- flexclust::dist2(new_data_matrix, center_matrix)
+    cluster_assignments <- apply(dist_matrix, 1, which.min)
+    nclusters <- nrow(center_matrix)
+    return(cluster_assignment_tibble(as.numeric(cluster_assignments), nclusters, ...))
+  }
+
+  if(global_method == "hier_clust"){
+    global_model <- attr(object, "global_model")
+
+    if (!("num_clusters" %in% names(args) || "cut_height" %in% names(args))) {
+      num_clusters <- attr(object, "num_clusters")
+      cut_height <- attr(object, "cut_height")
+    } else {
+      num_clusters <- args[["num_clusters"]]
+      cut_height <- args[["cut_height"]]
+    }
+
+    if (is.null(num_clusters) && is.null(cut_height)) {
+      rlang::abort(
+        "Please specify either `num_clusters` or `cut_height`.",
+        call = call
+      )
+    }
+
+    centers <- if (!is.null(num_clusters)){
+      extract_centroids(global_model, num_clusters = num_clusters)
+    } else {
+      extract_centroids(global_model, cut_height = cut_height)
+    }
+
+    center_matrix <- as.matrix(centers[ ,-1])
+
+    dist_matrix <- flexclust::dist2(new_data_matrix, center_matrix)
+    cluster_assignments <- apply(dist_matrix, 1, which.min)
+    nclusters <- nrow(center_matrix)
+    return(cluster_assignment_tibble(as.numeric(cluster_assignments), nclusters, ...))
+  }
+}
+
 # ------------------------------------------------------------------------------
 
 cluster_assignment_tibble <- function(clusters,
